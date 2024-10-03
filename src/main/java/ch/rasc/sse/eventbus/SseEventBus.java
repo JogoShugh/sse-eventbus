@@ -46,6 +46,8 @@ public class SseEventBus {
 
 	private final SubscriptionRegistry subscriptionRegistry;
 
+	private final MediaTypeAwareDataObjectConverter mediaTypeAwareDataObjectConverter;
+
 	private final ScheduledExecutorService taskScheduler;
 
 	private final int noOfSendResponseTries;
@@ -61,9 +63,14 @@ public class SseEventBus {
 	private final SseEventBusListener listener;
 
 	public SseEventBus(SseEventBusConfigurer configurer, SubscriptionRegistry subscriptionRegistry) {
+		this(configurer, subscriptionRegistry, new MediaTypeAwareDataObjectConverter() {});
+	}
 
+	public SseEventBus(SseEventBusConfigurer configurer, SubscriptionRegistry subscriptionRegistry,
+										 MediaTypeAwareDataObjectConverter mtConverter) {
+
+		this.mediaTypeAwareDataObjectConverter = mtConverter;
 		this.subscriptionRegistry = subscriptionRegistry;
-
 		this.noOfSendResponseTries = configurer.noOfSendResponseTries();
 		this.clientExpiration = configurer.clientExpiration();
 
@@ -208,11 +215,6 @@ public class SseEventBus {
 	public void handleEvent(SseEvent event) {
 		try {
 
-//			String convertedValue = null;
-//			if (!(event.data() instanceof String)) {
-//				convertedValue = this.convertObject(event);
-//			}
-
 			if (event.clientIds().isEmpty()) {
 				for (Client client : this.clients.values()) {
 					if (!event.excludeClientIds().contains(client.getId())
@@ -354,11 +356,13 @@ public class SseEventBus {
 		catch (Exception e) {
 			return e;
 		}
-
 	}
 
 	protected String convertObjectForClient(SseEvent event, Client client) {
-		System.out.println("convertObjectForClient " + event + " for " + client + " with MediaType: " + client.mediaType().toString());
+		MediaType mediaType = client.mediaType();
+		if (mediaTypeAwareDataObjectConverter.supports(event, mediaType)) {
+			return mediaTypeAwareDataObjectConverter.convert(event, mediaType);
+		}
 		return convertObject(event);
 	}
 
@@ -448,3 +452,4 @@ public class SseEventBus {
 	}
 
 }
+

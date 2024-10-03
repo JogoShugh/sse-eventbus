@@ -18,18 +18,12 @@ package ch.rasc.sse.eventbus.config;
 import java.util.ArrayList;
 import java.util.List;
 
+import ch.rasc.sse.eventbus.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-
-import ch.rasc.sse.eventbus.DataObjectConverter;
-import ch.rasc.sse.eventbus.DefaultDataObjectConverter;
-import ch.rasc.sse.eventbus.DefaultSubscriptionRegistry;
-import ch.rasc.sse.eventbus.JacksonDataObjectConverter;
-import ch.rasc.sse.eventbus.SseEventBus;
-import ch.rasc.sse.eventbus.SubscriptionRegistry;
 
 /**
  * To enable the SSE EventBus library create a @Configuration class that either
@@ -55,6 +49,9 @@ public class DefaultSseEventBusConfiguration {
 	@Autowired(required = false)
 	protected SubscriptionRegistry subscriptionRegistry;
 
+	@Autowired(required = false)
+	protected MediaTypeAwareDataObjectConverter mediaTypeAwareDataObjectConverter;
+
 	@Bean
 	public SseEventBus eventBus() {
 		SseEventBusConfigurer config = this.configurer;
@@ -68,7 +65,13 @@ public class DefaultSseEventBusConfiguration {
 			registry = new DefaultSubscriptionRegistry();
 		}
 
-		SseEventBus sseEventBus = new SseEventBus(config, registry);
+		MediaTypeAwareDataObjectConverter mtConverter = this.mediaTypeAwareDataObjectConverter;
+		if (mtConverter == null) {
+			mtConverter = new MediaTypeAwareDataObjectConverter() {
+				/* nothing_here */ };
+		}
+
+		SseEventBus sseEventBus = new SseEventBus(config, registry, mtConverter);
 
 		List<DataObjectConverter> converters = this.dataObjectConverters;
 		if (converters == null) {
