@@ -18,7 +18,6 @@ package ch.rasc.sse.eventbus;
 import java.time.Duration;
 
 import org.springframework.http.MediaType;
-import org.springframework.web.servlet.function.ServerResponse;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter.SseEventBuilder;
 
