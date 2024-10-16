@@ -15,6 +15,7 @@
  */
 package ch.rasc.sse.eventbus;
 
+import org.springframework.http.MediaType;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 public class Client {
@@ -25,6 +26,8 @@ public class Client {
 
 	private long lastTransfer;
 
+	private final MediaType mediaType;
+
 	private final boolean completeAfterMessage;
 
 	Client(String id, SseEmitter sseEmitter, boolean completeAfterMessage) {
@@ -32,7 +35,17 @@ public class Client {
 		this.sseEmitter = sseEmitter;
 		this.lastTransfer = System.currentTimeMillis();
 		this.completeAfterMessage = completeAfterMessage;
+		this.mediaType = MediaType.TEXT_PLAIN;
 	}
+
+	Client(String id, SseEmitter sseEmitter, boolean completeAfterMessage, MediaType mediaType) {
+		this.id = id;
+		this.sseEmitter = sseEmitter;
+		this.lastTransfer = System.currentTimeMillis();
+		this.completeAfterMessage = completeAfterMessage;
+		this.mediaType = mediaType;
+	}
+
 
 	public String getId() {
 		return this.id;
@@ -58,4 +71,5 @@ public class Client {
 		return this.completeAfterMessage;
 	}
 
+	public MediaType mediaType() { return this.mediaType; }
 }

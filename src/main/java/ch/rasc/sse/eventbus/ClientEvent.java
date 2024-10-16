@@ -17,6 +17,7 @@ package ch.rasc.sse.eventbus;
 
 import java.time.Duration;
 
+import org.springframework.http.MediaType;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter.SseEventBuilder;
 
@@ -30,11 +31,14 @@ public class ClientEvent {
 
 	private int errorCounter;
 
+	private final MediaType mediaType;
+
 	public ClientEvent(Client client, SseEvent event, String convertedValue) {
 		this.client = client;
 		this.event = event;
 		this.convertedValue = convertedValue;
 		this.errorCounter = 0;
+		this.mediaType = client.mediaType();
 	}
 
 	public Client getClient() {
@@ -64,11 +68,11 @@ public class ClientEvent {
 		}
 		else if (this.event.data() instanceof String) {
 			for (String line : ((String) this.event.data()).split("\n")) {
-				sseBuilder.data(line);
+				assignData(sseBuilder, line);
 			}
 		}
 		else {
-			sseBuilder.data(this.event.data());
+			assignData(sseBuilder, event.data());
 		}
 
 		return sseBuilder;
@@ -81,6 +85,13 @@ public class ClientEvent {
 
 	public int getErrorCounter() {
 		return this.errorCounter;
+	}
+
+	private void assignData(SseEventBuilder builder, Object object) {
+		if (this.mediaType != null)
+			builder.data(object, mediaType);
+		else
+			builder.data(object);
 	}
 
 }

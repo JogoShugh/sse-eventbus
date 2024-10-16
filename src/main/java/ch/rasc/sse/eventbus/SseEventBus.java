@@ -31,6 +31,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.logging.LogFactory;
 import org.springframework.context.event.EventListener;
+import org.springframework.http.MediaType;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import ch.rasc.sse.eventbus.config.SseEventBusConfigurer;
@@ -44,6 +45,8 @@ public class SseEventBus {
 	private final ConcurrentMap<String, Client> clients;
 
 	private final SubscriptionRegistry subscriptionRegistry;
+
+	private final MediaTypeAwareDataObjectConverter mediaTypeAwareDataObjectConverter;
 
 	private final ScheduledExecutorService taskScheduler;
 
@@ -60,9 +63,14 @@ public class SseEventBus {
 	private final SseEventBusListener listener;
 
 	public SseEventBus(SseEventBusConfigurer configurer, SubscriptionRegistry subscriptionRegistry) {
+		this(configurer, subscriptionRegistry, new MediaTypeAwareDataObjectConverter() {});
+	}
 
+	public SseEventBus(SseEventBusConfigurer configurer, SubscriptionRegistry subscriptionRegistry,
+										 MediaTypeAwareDataObjectConverter mtConverter) {
+
+		this.mediaTypeAwareDataObjectConverter = mtConverter;
 		this.subscriptionRegistry = subscriptionRegistry;
-
 		this.noOfSendResponseTries = configurer.noOfSendResponseTries();
 		this.clientExpiration = configurer.clientExpiration();
 
@@ -94,19 +102,23 @@ public class SseEventBus {
 	}
 
 	public SseEmitter createSseEmitter(String clientId, String... events) {
-		return createSseEmitter(clientId, 180_000L, false, false, events);
+		return createSseEmitter(clientId, 180_000L, false, false, MediaType.TEXT_PLAIN, events);
 	}
 
 	public SseEmitter createSseEmitter(String clientId, boolean unsubscribe, String... events) {
-		return createSseEmitter(clientId, 180_000L, unsubscribe, false, events);
+		return createSseEmitter(clientId, 180_000L, unsubscribe, false,  MediaType.TEXT_PLAIN, events);
+	}
+
+	public SseEmitter createSseEmitter(String clientId, Long timeout, MediaType mediaType, String... events) {
+		return createSseEmitter(clientId, timeout, false, false, mediaType, events);
 	}
 
 	public SseEmitter createSseEmitter(String clientId, Long timeout, String... events) {
-		return createSseEmitter(clientId, timeout, false, false, events);
+		return createSseEmitter(clientId, timeout, false, false, MediaType.TEXT_PLAIN, events);
 	}
 
 	public SseEmitter createSseEmitter(String clientId, Long timeout, boolean unsubscribe, String... events) {
-		return createSseEmitter(clientId, timeout, unsubscribe, false, events);
+		return createSseEmitter(clientId, timeout, unsubscribe, false, MediaType.TEXT_PLAIN, events);
 	}
 
 	/**
@@ -120,10 +132,10 @@ public class SseEventBus {
 	 * @return a new SseEmitter instance
 	 */
 	public SseEmitter createSseEmitter(String clientId, Long timeout, boolean unsubscribe, boolean completeAfterMessage,
-			String... events) {
+			MediaType mediaType, String... events) {
 		SseEmitter emitter = new SseEmitter(timeout);
 		emitter.onTimeout(emitter::complete);
-		registerClient(clientId, emitter, completeAfterMessage);
+		registerClient(clientId, emitter, mediaType, completeAfterMessage);
 
 		if (events != null && events.length > 0) {
 			if (unsubscribe) {
@@ -138,13 +150,13 @@ public class SseEventBus {
 	}
 
 	public void registerClient(String clientId, SseEmitter emitter) {
-		this.registerClient(clientId, emitter, false);
+		this.registerClient(clientId, emitter, MediaType.TEXT_PLAIN,false);
 	}
 
-	public void registerClient(String clientId, SseEmitter emitter, boolean completeAfterMessage) {
+	public void registerClient(String clientId, SseEmitter emitter, MediaType mediaType, boolean completeAfterMessage) {
 		Client client = this.clients.get(clientId);
 		if (client == null) {
-			this.clients.put(clientId, new Client(clientId, emitter, completeAfterMessage));
+			this.clients.put(clientId, new Client(clientId, emitter, completeAfterMessage, mediaType));
 		}
 		else {
 			client.updateEmitter(emitter);
@@ -203,15 +215,17 @@ public class SseEventBus {
 	public void handleEvent(SseEvent event) {
 		try {
 
-			String convertedValue = null;
-			if (!(event.data() instanceof String)) {
-				convertedValue = this.convertObject(event);
-			}
-
 			if (event.clientIds().isEmpty()) {
 				for (Client client : this.clients.values()) {
 					if (!event.excludeClientIds().contains(client.getId())
 							&& this.subscriptionRegistry.isClientSubscribedToEvent(client.getId(), event.event())) {
+
+						// *** Per-client conversion ***
+						String convertedValue = null;
+						if (!(event.data() instanceof String)) {
+							convertedValue = this.convertObjectForClient(event, client);
+						}
+
 						ClientEvent clientEvent = new ClientEvent(client, event, convertedValue);
 						this.sendQueue.put(clientEvent);
 						this.listener.afterEventQueued(clientEvent, true);
@@ -221,7 +235,15 @@ public class SseEventBus {
 			else {
 				for (String clientId : event.clientIds()) {
 					if (this.subscriptionRegistry.isClientSubscribedToEvent(clientId, event.event())) {
-						ClientEvent clientEvent = new ClientEvent(this.clients.get(clientId), event, convertedValue);
+
+						Client client = this.clients.get(clientId);
+						// *** Per-client conversion ***
+						String convertedValue = null;
+						if (!(event.data() instanceof String)) {
+							convertedValue = this.convertObjectForClient(event, client);
+						}
+
+						ClientEvent clientEvent = new ClientEvent(client, event, convertedValue);
 						this.sendQueue.put(clientEvent);
 						this.listener.afterEventQueued(clientEvent, true);
 					}
@@ -334,7 +356,14 @@ public class SseEventBus {
 		catch (Exception e) {
 			return e;
 		}
+	}
 
+	protected String convertObjectForClient(SseEvent event, Client client) {
+		MediaType mediaType = client.mediaType();
+		if (mediaTypeAwareDataObjectConverter.supports(event, mediaType)) {
+			return mediaTypeAwareDataObjectConverter.convert(event, mediaType);
+		}
+		return convertObject(event);
 	}
 
 	private String convertObject(SseEvent event) {

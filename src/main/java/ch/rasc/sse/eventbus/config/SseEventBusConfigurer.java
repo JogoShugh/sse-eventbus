@@ -74,6 +74,12 @@ public interface SseEventBusConfigurer {
 	}
 
 	/**
+	 * Allows you to bypass the DataObjectConverters behavior and utilize Spring's
+	 * built-in support for media type based conversion.
+	 */
+	default boolean bypassDataObjectConverters() { return false; }
+
+	/**
 	 * An executor that schedules and runs the internal jobs
 	 * <p>
 	 * By default this is an instance created with
