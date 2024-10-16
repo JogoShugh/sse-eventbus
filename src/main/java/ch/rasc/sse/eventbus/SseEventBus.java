@@ -243,7 +243,7 @@ public class SseEventBus {
 							convertedValue = this.convertObjectForClient(event, client);
 						}
 
-						ClientEvent clientEvent = new ClientEvent(this.clients.get(clientId), event, convertedValue);
+						ClientEvent clientEvent = new ClientEvent(client, event, convertedValue);
 						this.sendQueue.put(clientEvent);
 						this.listener.afterEventQueued(clientEvent, true);
 					}
@@ -452,4 +452,3 @@ public class SseEventBus {
 	}
 
 }
-

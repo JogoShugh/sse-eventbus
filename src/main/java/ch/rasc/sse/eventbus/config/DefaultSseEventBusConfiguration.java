@@ -78,11 +78,12 @@ public class DefaultSseEventBusConfiguration {
 			converters = new ArrayList<>();
 		}
 
-		if (this.objectMapper != null) {
-			converters.add(new JacksonDataObjectConverter(this.objectMapper));
-		}
-		else {
-			converters.add(new DefaultDataObjectConverter());
+		if (!config.bypassDataObjectConverters()) {
+			if (this.objectMapper != null) {
+				converters.add(new JacksonDataObjectConverter(this.objectMapper));
+			} else {
+				converters.add(new DefaultDataObjectConverter());
+			}
 		}
 
 		sseEventBus.setDataObjectConverters(converters);
